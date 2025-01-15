@@ -20,7 +20,7 @@ class RelayController:
     def load_relay_config(self):
         """Load relay configuration from the database."""
         query = """
-        SELECT r.id, d.device_name, d.gpio, r.relay_status, d.control_mode
+        SELECT r.id, d.device_name, d.gpio, r.relay_status, r.control_mode
         FROM relays r
         INNER JOIN devices d ON d.device_id = r.device_id
         ORDER BY r.id;
@@ -59,7 +59,7 @@ class RelayController:
     def fetch_and_update_relays(self):
         """Fetch relay statuses from the database and update GPIO pins."""
         query = """
-               SELECT r.id, d.device_name, d.gpio, r.relay_status, d.control_mode
+               SELECT r.id, d.device_name, d.gpio, r.relay_status, r.control_mode
         FROM relays r
         INNER JOIN devices d ON d.device_id = r.device_id
         ORDER BY r.id;

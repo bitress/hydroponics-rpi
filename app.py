@@ -12,7 +12,11 @@ from app.sensors.light_sensor import LightSensor
 from app.sensors.tank_temperature import TemperatureMonitor
 from app.sensors.ultrasonic import UltrasonicSensor
 from app.sensors.ph_sensor import SensorReader
+from app.sensors.relay import RelayController
+from app.sensors.dht22 import DHT22Sensor
+from app.sensors.camera import CameraCapture
 
+from app.actuators.feeder import Feeder
 ################################################################################
 # Global Configuration and Constants
 ################################################################################
@@ -66,42 +70,6 @@ def fetch_sensor_median(connection, sensor_id: int, n: int = 5) -> float:
 ################################################################################
 # Schedule and Threshold Functions
 ################################################################################
-
-def is_active_schedule_for_sensor(db_conn, sensor_id: int) -> bool:
-    """
-    Checks if there is an active schedule for the given sensor.
-    """
-    try:
-        query = """
-            SELECT COUNT(*) as active_count
-            FROM schedules
-            WHERE is_active = 1
-              AND target_type = 'sensor'
-              AND target_id = %s
-              AND (
-                  (recurrence = 'none' AND NOW() BETWEEN start_time AND end_time)
-                  OR
-                  (recurrence = 'daily' AND 
-                      (TIME(NOW()) BETWEEN TIME(start_time) AND TIME(end_time)))
-                  OR
-                  (recurrence = 'weekly' AND 
-                      DAYOFWEEK(NOW()) = DAYOFWEEK(start_time) AND 
-                      (TIME(NOW()) BETWEEN TIME(start_time) AND TIME(end_time)))
-                  OR
-                  (recurrence = 'monthly' AND 
-                      DAY(NOW()) = DAY(start_time) AND 
-                      (TIME(NOW()) BETWEEN TIME(start_time) AND TIME(end_time)))
-              )
-        """
-        result = db_conn.fetch_all(query, (sensor_id,), dictionary=True)
-        active_count = result[0]['active_count'] if result else 0
-        is_active = active_count > 0
-        logger.info(f"Sensor ID {sensor_id} Active Schedule Count: {active_count}")
-        return is_active
-    except Exception as e:
-        logger.error(f"Failed to check active schedules for Sensor ID: {sensor_id} | Error: {e}\n{traceback.format_exc()}")
-        return False
-
 def check_sensor_thresholds(db_conn, sensor_id: int, current_value: float) -> List[Dict[str, Any]]:
     """
     Checks if the current sensor value breaches any defined thresholds.
@@ -318,7 +286,16 @@ def cycle_worker(sensor_id: int, sensor, cycle: Dict[str, Any], stop_event: mult
                     dist = sensor.get_median_distance()
                     if dist is not None:
                         insert_sensor_data(db_conn, sensor_id, dist)
-
+                elif isinstance(sensor, DHT22Sensor):
+                    temperature_c = sensor.read_temperature()
+                    if temperature_c is not None:
+                        insert_sensor_data(db_conn, sensor_id, temperature_c)
+                elif isinstance(sensor, CameraCapture):
+                   
+                    try:
+                        sensor.start()
+                    except RuntimeError as e:
+                        print(e)
                 elif isinstance(sensor, SensorReader):
                     if map_value == 'ph':
                         ph = sensor.read_ph()
@@ -387,12 +364,16 @@ def run_sensor(sensor_id: int, stop_event: multiprocessing.Event, sensor_type: s
         elif sensor_type == 'light':
             sensor = LightSensor()
             sensor.power_on()
+        elif sensor_type == 'env_temp':
+            sensor = DHT22Sensor()
+        elif sensor_type == 'camera':
+            sensor = CameraCapture()
 
         logger.info(f"Sensor ID {sensor_id} of type '{sensor_type}' initialized.")
 
         while not stop_event.is_set():
             # Check if there is an active schedule for this sensor
-            if is_active_schedule_for_sensor(db_conn, sensor_id):
+            if is_active_schedule(db_conn, sensor_id, 'sensor'):
                 logger.info(f"Active schedule detected for Sensor ID {sensor_id}. Activating all cycles.")
                 # Activate all cycles for this sensor by setting is_active = 1
                 activate_all_cycles(db_conn, sensor_id)
@@ -504,59 +485,94 @@ def fetch_sensors_from_db(db_conn) -> Dict[int, str]:
         logger.error(f"Failed to fetch sensors from database | Error: {e}\n{traceback.format_exc()}")
         return {}
 
-def is_active_schedule_for_device(db_conn, device_id: int) -> bool:
+def is_active_schedule(db_conn, target_id: int, target_type: str) -> bool:
     """
-    Checks if there is an active schedule for the given device.
+    Checks if there is an active schedule for the given target (sensor or device).
     """
     try:
         query = """
-            SELECT COUNT(*) as active_count
-            FROM schedules
-            WHERE is_active = 1
-              AND target_type = 'device'
-              AND target_id = %s
-              AND (
-                  (recurrence = 'none' AND NOW() BETWEEN start_time AND end_time)
-                  OR
-                  (recurrence = 'daily' AND 
-                      (TIME(NOW()) BETWEEN TIME(start_time) AND TIME(end_time)))
-                  OR
-                  (recurrence = 'weekly' AND 
-                      DAYOFWEEK(NOW()) = DAYOFWEEK(start_time) AND 
-                      (TIME(NOW()) BETWEEN TIME(start_time) AND TIME(end_time)))
-                  OR
-                  (recurrence = 'monthly' AND 
-                      DAY(NOW()) = DAY(start_time) AND 
-                      (TIME(NOW()) BETWEEN TIME(start_time) AND TIME(end_time)))
-              )
+            SELECT st.start_time, st.end_time, st.day_of_week, st.specific_date, s.recurrence
+            FROM schedules s
+            JOIN schedule_times st ON s.schedule_id = st.schedule_id
+            WHERE s.is_active = 1
+              AND s.target_type = %s
+              AND s.target_id = %s
         """
-        result = db_conn.fetch_all(query, (device_id,), dictionary=True)
-        active_count = result[0]['active_count'] if result else 0
-        return active_count > 0
-    except Exception as e:
-        logger.error(f"Failed to check active schedules for Device ID: {device_id} | Error: {e}\n{traceback.format_exc()}")
+        results = db_conn.fetch_all(query, (target_type, target_id), dictionary=True)
+        now = datetime.now()
+
+        for schedule in results:
+            start_time = schedule["start_time"] if isinstance(schedule["start_time"], datetime) else datetime.strptime(schedule["start_time"], "%Y-%m-%d %H:%M:%S")
+            end_time = schedule["end_time"] if isinstance(schedule["end_time"], datetime) else datetime.strptime(schedule["end_time"], "%Y-%m-%d %H:%M:%S")
+
+
+            if schedule["recurrence"] == "none" and start_time <= now <= end_time:
+                return True
+
+            if schedule["recurrence"] == "daily" and start_time.time() <= now.time() <= end_time.time():
+                return True
+
+            if schedule["recurrence"] == "weekly" and schedule["day_of_week"]:
+                current_day = now.strftime("%A")
+                if current_day in schedule["day_of_week"] and start_time.time() <= now.time() <= end_time.time():
+                    return True
+
+            if schedule["recurrence"] == "specific_dates" and schedule["specific_date"]:
+                specific_date = datetime.strptime(schedule["specific_date"], "%Y-%m-%d").date()
+                if specific_date == now.date() and start_time.time() <= now.time() <= end_time.time():
+                    return True
+
         return False
-
-
-def activate_device(device_id: int):
+    except Exception as e:
+        logger.error(f"Failed to check active schedules for {target_type} ID: {target_id} | Error: {e}\n{traceback.format_exc()}")
+        return False
+    
+def activate_device(device_id: int, devices):
     """
-    Activates the device (e.g., turn on the GPIO pin).
+    Activates the device based on its type and configuration.
+    :param device_id: The ID of the device to activate.
+    :param devices: The list of devices from the database.
     """
     try:
-        logger.info(f"Activating Device ID {device_id}.")
-        # Add GPIO logic here to turn on the device
-        # Example: gpio.output(device_pin, gpio.HIGH)
+        device = next((d for d in devices if d['device_id'] == device_id), None)
+        if not device:
+            logger.error(f"Device ID {device_id} not found.")
+            return
+
+        gpio_pin = device['gpio']
+
+        if device['device_type'] == 'relay':
+           relay = RelayController()
+           relay.control_relay(gpio_pin, 1)
+        elif device['device_type'] == 'servo':
+            feeder = Feeder(gpio_pin)
+            feeder.open_feeder()
+            
+        logger.info(f"Device ID {device_id} activated successfully.")
+
     except Exception as e:
         logger.error(f"Failed to activate Device ID {device_id}: {e}\n{traceback.format_exc()}")
 
-def deactivate_device(device_id: int):
+
+def deactivate_device(device_id: int, device):
     """
     Deactivates the device (e.g., turn off the GPIO pin).
     """
     try:
         logger.info(f"Deactivating Device ID {device_id}.")
-        # Add GPIO logic here to turn off the device
-        # Example: gpio.output(device_pin, gpio.LOW)
+
+        if not device:
+            logger.error(f"Device ID {device_id} not found.")
+            return
+
+        gpio_pin = device['gpio']
+
+        if device['device_type'] == 'relay':
+           relay = RelayController()
+           relay.control_relay(gpio_pin, 0)
+            
+        logger.info(f"Device ID {device_id} activated successfully.")
+
     except Exception as e:
         logger.error(f"Failed to deactivate Device ID {device_id}: {e}\n{traceback.format_exc()}")
 
@@ -569,23 +585,24 @@ def monitor_devices(db_conn, stop_event: multiprocessing.Event):
     while not stop_event.is_set():
         try:
             # Fetch all devices
-            devices_query = "SELECT device_id, device_name FROM devices WHERE is_active = 1"
+            devices_query = "SELECT * FROM devices WHERE is_active = 1"
             devices = db_conn.fetch_all(devices_query, (), dictionary=True)
 
             for device in devices:
                 device_id = device['device_id']
                 device_name = device['device_name']
+                print(device)
 
                 # Check if there's an active schedule for the device
-                is_active = is_active_schedule_for_device(db_conn, device_id)
+                is_active = is_active_schedule(db_conn, device_id, 'device')
 
                 # Activate or deactivate the device based on schedule
                 if is_active and device_states.get(device_id) != "active":
-                    activate_device(device_id)
+                    activate_device(device_id, device)
                     device_states[device_id] = "active"
                     logger.info(f"Device {device_name} (ID {device_id}) activated based on schedule.")
                 elif not is_active and device_states.get(device_id) != "inactive":
-                    deactivate_device(device_id)
+                    deactivate_device(device_id, device)
                     device_states[device_id] = "inactive"
                     logger.info(f"Device {device_name} (ID {device_id}) deactivated based on schedule.")
 
@@ -634,6 +651,8 @@ def main() -> None:
         logger.info("All sensor processes have been started. Entering main loop.")
 
         while True:
+            controller = RelayController()
+            controller.run()
             time.sleep(1)
 
     except KeyboardInterrupt:
