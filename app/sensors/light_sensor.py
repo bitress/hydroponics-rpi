@@ -39,3 +39,4 @@ class LightSensor:
     def reset(self):
         """Reset the sensor"""
         self.bus.write_byte(self.device_address, self.RESET)
+

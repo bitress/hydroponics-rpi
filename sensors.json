@@ -1,0 +1,95 @@
+[
+    {
+      "type": "header",
+      "version": "5.2.1deb3",
+      "comment": "Export to JSON plugin for PHPMyAdmin"
+    },
+    {
+      "type": "database",
+      "name": "hydroponics"
+    },
+    {
+      "type": "table",
+      "name": "sensors",
+      "database": "hydroponics",
+      "data": [
+        {
+          "id": "1",
+          "sensor_name": "pH Sensor (pH Level)",
+          "is_active": "1",
+          "config": "{\"map\": \"ph\"}",
+          "created_at": "2024-12-28 13:38:44"
+        },
+        {
+          "id": "2",
+          "sensor_name": "pH Level (pH Temperature)",
+          "is_active": "1",
+          "config": "{\"map\": \"ph_temp\"}",
+          "created_at": "2024-12-28 13:38:44"
+        },
+        {
+          "id": "3",
+          "sensor_name": "Temperature (Tank 1)",
+          "is_active": "1",
+          "config": "{\"map\": \"tank1\"}",
+          "created_at": "2024-12-28 13:38:44"
+        },
+        {
+          "id": "4",
+          "sensor_name": "Temperature (Tank 2)",
+          "is_active": "1",
+          "config": "{\"map\": \"tank2\"}",
+          "created_at": "2024-12-28 13:38:44"
+        },
+        {
+          "id": "5",
+          "sensor_name": "Water Level (Ultrasonic)",
+          "is_active": "1",
+          "config": "{\"map\": \"ultrasonic\", \"gpio\": {\"echo\": 15, \"trig\": 18}}",
+          "created_at": "2024-12-28 13:38:44"
+        },
+        {
+          "id": "6",
+          "sensor_name": "Light Intensity Sensor",
+          "is_active": "1",
+          "config": "{\"map\": \"light\"}",
+          "created_at": "2024-12-28 13:38:44"
+        },
+        {
+          "id": "7",
+          "sensor_name": "Camera",
+          "is_active": "1",
+          "config": "{\"map\": \"camera\"}",
+          "created_at": "2025-01-15 14:17:43"
+        },
+        {
+          "id": "8",
+          "sensor_name": "Ambient Temperature",
+          "is_active": "1",
+          "config": "{\"map\": \"env_temp\"}",
+          "created_at": "2025-01-15 21:39:01"
+        },
+        {
+          "id": "9",
+          "sensor_name": "Pump (Tank)",
+          "is_active": "1",
+          "config": "{\"map\": \"pump_tank\"}",
+          "created_at": "2025-01-29 15:19:36"
+        },
+        {
+          "id": "10",
+          "sensor_name": "Pump 2",
+          "is_active": "1",
+          "config": "{\"map\": \"pump_2\"}",
+          "created_at": "2025-01-29 15:19:36"
+        },
+        {
+          "id": "11",
+          "sensor_name": "Ambient Humidity",
+          "is_active": "1",
+          "config": "{\"map\": \"humidity\"}",
+          "created_at": "2025-02-07 10:26:17"
+        }
+      ]
+    }
+  ]
