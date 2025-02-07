@@ -254,7 +254,7 @@ def cycle_worker(sensor_id: int, sensor, cycle: Dict[str, Any], stop_event: mult
                         if temperature_c is not None:
                             insert_sensor_data(db_conn, sensor_id, temperature_c)
                     if map_value == 'humidity':
-                        humidity = sensor.read_temperature()
+                        humidity = sensor.read_humidity()
                         if humidity is not None:
                             insert_sensor_data(db_conn, sensor_id, humidity)
                 elif isinstance(sensor, CameraCapture):
