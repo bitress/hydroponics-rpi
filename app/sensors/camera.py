@@ -14,7 +14,7 @@ class CameraCapture:
         :param camera_index: Index of the camera to use.
         """
         self.api_url = "https://lettuce.ebasura.online/api/detect"
-        self.capture_interval = 1
+        self.capture_interval = 14400
         self.camera_index = 0
         self.camera = cv2.VideoCapture(self.camera_index)
 
