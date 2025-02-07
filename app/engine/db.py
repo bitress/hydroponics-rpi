@@ -28,17 +28,7 @@ class MySQLWrapper:
             print(f"Error: {e}")
 
     def ensure_connection(self):
-        """Check if the connection is still active, reconnect if necessary."""
-        try:
-            if self.connection and self.connection.is_connected():
-                # Ping the server to verify connection
-                self.connection.ping(reconnect=True, attempts=3, delay=5)
-            else:
-                print("Reconnecting to the database...")
-                self.connect()
-        except Error:
-            print("Reconnecting to the database...")
-            self.connect()
+        return True
 
     def execute_query(self, query, params=None):
         """Execute a single query (INSERT, UPDATE, DELETE)."""
@@ -77,10 +67,7 @@ class MySQLWrapper:
     def fetch_one(self, query, params=None):
         """Fetch a single result for a SELECT query."""
         try:
-            self.ensure_connection()
-            # Force the connection to reconnect
-            self.connection.cmd_reset_connection()
-            
+            self.ensure_connection()            
             with self.connection.cursor() as cursor:
                 cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
                 cursor.execute(query, params)

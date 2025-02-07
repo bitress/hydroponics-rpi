@@ -21,6 +21,17 @@ class DHT22Sensor:
             print(f"Error reading temperature: {err.args[0]}")
             return None
 
+    def read_humidity(self):
+        """
+        Reads the humidity from the DHT22 sensor.
+        :return: humidity or None if an error occurs.
+        """
+        try:
+            return self.dht_device.humidity
+        except RuntimeError as err:
+            print(f"Error reading humidity: {err.args[0]}")
+            return None
+
     def cleanup(self):
         """
         Perform any necessary cleanup.
