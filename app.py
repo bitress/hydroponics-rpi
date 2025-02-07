@@ -349,26 +349,21 @@ def run_sensor(sensor_id: int, stop_event: multiprocessing.Event, sensor_type: s
         while not stop_event.is_set():
             activate_all_cycles(db_conn, sensor_id)
 
-            # Fetch all active cycles for this sensor
             cycles = fetch_cycles(db_conn, sensor_id)
             active_cycle_ids = {cycle['cycle_id'] for cycle in cycles}
 
-            # Start cycles that are active and not already running
             for cycle in cycles:
                 cycle_id = cycle['cycle_id']
                 if cycle_id not in cycle_processes:
-                    # Start a new cycle process
                     process = multiprocessing.Process(
                         target=cycle_worker,
                         args=(sensor_id, sensor, cycle, stop_event, db_conn, sensor_type),
                         name=f"Sensor-{sensor_id}-Cycle-{cycle_id}-Process"
-                        # daemon=False by default
                     )
                     process.start()
                     cycle_processes[cycle_id] = process
                     logger.info(f"Started Cycle ID {cycle_id} for Sensor ID {sensor_id}.")
 
-            # Terminate cycles that are no longer active
             for cycle_id in list(cycle_processes.keys()):
                 if cycle_id not in active_cycle_ids:
                     process = cycle_processes.pop(cycle_id)
@@ -384,7 +379,7 @@ def run_sensor(sensor_id: int, stop_event: multiprocessing.Event, sensor_type: s
             else:
                 logger.info(f"Monitoring active cycles for Sensor ID {sensor_id}.")
 
-            time.sleep(10)  # Wait before the next cycle check
+            time.sleep(36000)
 
     except Exception as e:
         logger.error(f"Error in {sensor_type}_sensor for Sensor ID {sensor_id}: {e}\n{traceback.format_exc()}")
