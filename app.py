@@ -459,99 +459,6 @@ def fetch_sensors_from_db(db_conn) -> Dict[int, str]:
         return {}
 
 
-def activate_device(device_id: int, devices):
-    """
-    Activates the device based on its type and configuration.
-    :param device_id: The ID of the device to activate.
-    :param devices: The list of devices from the database.
-    """
-    try:
-        logger.info(f"Activate Device Data: {devices}")
-        device = next((d for d in devices if d['device_id'] == device_id), None)
-
-        if not device:
-            logger.error(f"Device ID {device_id} not found.")
-            return
-
-        gpio_pin = device['gpio']
-
-        if device['device_type'] == 'relay':
-           relay = RelayController()
-           relay.control_relay(gpio_pin, 1)
-        elif device['device_type'] == 'servo':
-            feeder = Feeder(gpio_pin)
-            feeder.open_feeder()
-            
-        logger.info(f"Device ID {device_id} activated successfully.")
-
-    except Exception as e:
-        logger.error(f"Failed to activate Device ID {device_id}: {e}\n{traceback.format_exc()}")
-
-
-def deactivate_device(device_id: int, device):
-    """
-    Deactivates the device (e.g., turn off the GPIO pin).
-    """
-    try:
-        logger.info(f"Deactivating Device ID {device_id}.")
-
-        if not device:
-            logger.error(f"Device ID {device_id} not found.")
-            return
-
-        gpio_pin = device['gpio']
-
-        if device['device_type'] == 'relay':
-           relay = RelayController()
-           relay.control_relay(gpio_pin, 0)
-            
-        logger.info(f"Device ID {device_id} activated successfully.")
-
-    except Exception as e:
-        logger.error(f"Failed to deactivate Device ID {device_id}: {e}\n{traceback.format_exc()}")
-
-def monitor_devices(db_conn, stop_event: multiprocessing.Event, sensor_id: int):
-    """
-    Monitors and activates/deactivates devices based on their schedules.
-    """
-    device_states = {}  # Keep track of current device states to avoid redundant actions
-
-    while not stop_event.is_set():
-        try:
-            # Fetch all devices
-            devices_query = "SELECT * FROM devices WHERE is_active = 1"
-            devices = db_conn.fetch_all(devices_query, (), dictionary=True)
-
-            for device in devices:
-                device_id = device['device_id']
-                device_name = device['device_name']
-
-                # Check if there's an active schedule for the device
-                is_active = is_active_schedule(db_conn, device_id, 'device')
-                value = fetch_sensor_median(db_conn, sensor_id)
-                if(check_sensor_thresholds(db_conn, sensor_id, value)):
-                    activate_sensor_device_mapping(db_conn, device_id)
-                
-                logger.info(device_states)
-
-                # Activate or deactivate the device based on schedule
-                if is_active and device_states.get(device_id) != "active":
-                    deactivate_device(device_id, devices)
-                    logger.info(devices)
-                    device_states[device_id] = "active"
-                    logger.info(f"Device {device_name} (ID {device_id}) activated based on schedule.")
-                elif not is_active and device_states.get(device_id) != "inactive":
-                    activate_device(device_id, devices)
-                    logger.info(devices)
-
-                    device_states[device_id] = "inactive"
-                    logger.info(f"Device {device_name} (ID {device_id}) deactivated based on schedule.")
-
-        except Exception as e:
-            logger.error(f"Error while monitoring devices: {e}\n{traceback.format_exc()}")
-
-        time.sleep(10)  # Check schedules every 10 seconds
-
 ################################################################################
 # Main Function
 ################################################################################
@@ -582,12 +489,6 @@ def main() -> None:
             processes[sensor_id] = process
             logger.info(f"Started process for Sensor ID {sensor_id} with Sensor Type '{sensor_type}'.")
             
-            device_monitor_process = multiprocessing.Process(
-                target=monitor_devices,
-                args=(main_db_conn, stop_event, sensor_id),
-                name="Device-Monitor-Process")
-            device_monitor_process.start()
-
 
         logger.info("All sensor processes have been started. Entering main loop.")
 
