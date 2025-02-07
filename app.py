@@ -347,9 +347,7 @@ def run_sensor(sensor_id: int, stop_event: multiprocessing.Event, sensor_type: s
         logger.info(f"Sensor ID {sensor_id} of type '{sensor_type}' initialized.")
 
         while not stop_event.is_set():
-            if is_active_schedule(db_conn, sensor_id, 'sensor'):
-                logger.info(f"Active schedule detected for Sensor ID {sensor_id}. Activating all cycles.")
-                activate_all_cycles(db_conn, sensor_id)
+            activate_all_cycles(db_conn, sensor_id)
 
             # Fetch all active cycles for this sensor
             cycles = fetch_cycles(db_conn, sensor_id)
